@@ -1,8 +1,6 @@
-import logging
-logging.basicConfig(level=logging.INFO)
-
 import asyncio
 import os
+import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -12,42 +10,46 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta
 
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+
 # Загрузка переменных окружения
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 SPREADSHEET_NAME = os.getenv("SPREADSHEET_NAME")
-TRIBUTE_LINK = os.getenv("TRIBUTE_LINK") or "https://tribute.tg/ВАША_ССЫЛКА_НА_ОПЛАТУ"
+TRIBUTE_LINK = os.getenv("TRIBUTE_LINK")
 
 # Инициализация бота и диспетчера
 bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher(storage=MemoryStorage())
 
-# Словарь для хранения времени начала взаимодействия с ботом
-user_start_times = {}
-
-# Получение доступа к Google Sheets
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets",
-         "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
+# Доступ к Google Sheets
+scope = [
+    "https://spreadsheets.google.com/feeds",
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/drive",
+]
 credentials = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
 gs = gspread.authorize(credentials)
 worksheet = gs.open(SPREADSHEET_NAME).sheet1
 
-
+# Загрузка всех записей из таблицы
 def load_posts():
-    rows = worksheet.get_all_records()
-    return rows
+    return worksheet.get_all_records()
 
-
-async def send_post(user_id, post, with_button):
-    content = post['content']
-    media_type = post['media_type'].strip().lower()
+# Отправка одного поста
+async def send_post(user_id, post):
+    content = post.get('content', '')
+    media_type = post.get('media_type', '').strip().lower()
     file_url = post.get('file_url', '').strip()
+    with_button = str(post.get('pay_button', '')).strip().lower() == 'true'
 
     markup = None
-    if with_button:
-        markup = InlineKeyboardMarkup().add(
-            InlineKeyboardButton("💳 Оплатить", url=TRIBUTE_LINK)
-        )
+    if with_button and TRIBUTE_LINK:
+        markup = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton("💳 Оплатить", url=TRIBUTE_LINK)]
+        ])
 
     try:
         if media_type == "text":
@@ -55,31 +57,30 @@ async def send_post(user_id, post, with_button):
         elif media_type == "photo":
             await bot.send_photo(user_id, photo=file_url, caption=content, reply_markup=markup)
         elif media_type == "video":
-            await bot.send_video(user_id, video=file_url, caption=content, reply_markup=markup)
+            await bot.send_video(user_id, video= file_url, caption=content, reply_markup=markup)
         elif media_type == "document":
             await bot.send_document(user_id, document=file_url, caption=content, reply_markup=markup)
     except Exception as e:
-        print(f"Ошибка при отправке сообщения пользователю {user_id}: {e}")
+        logging.error(f"Error sending post to {user_id}: {e}")
 
-
+# Обработка всех входящих сообщений
 @dp.message()
 async def handle_all_messages(message: types.Message):
     user_id = message.from_user.id
     if message.text == "/start":
-        user_start_times[user_id] = datetime.now()
+        logging.info(f"User {user_id} started sequence")
         await message.answer("🚀 Отлично! Сейчас начну присылать тебе материалы.")
         posts = load_posts()
         for post in posts:
             delay = int(post.get('delay_minutes', 0))
             await asyncio.sleep(delay * 60)
-            with_button = str(post.get('pay_button', '')).lower() == 'true'
-            await send_post(user_id, post, with_button)
+            await send_post(user_id, post)
     else:
         await message.answer("👋 Добро пожаловать! Нажми /start, чтобы начать.")
 
-
+# Запуск бота
 async def main():
-    await dp.start_polling(bot)
+    await dp.start_polling(bot, skip_updates=True)
 
 if __name__ == "__main__":
     asyncio.run(main())
