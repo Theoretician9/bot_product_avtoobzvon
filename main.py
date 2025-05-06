@@ -138,6 +138,7 @@ dp.message.register(handle_paid, Cmd(commands=["paid"]))
 
 # Точка входа
 async def main():
+    logging.info("Bot is starting polling now...")
     await dp.start_polling(bot, skip_updates=True)
 
 if __name__ == "__main__":
