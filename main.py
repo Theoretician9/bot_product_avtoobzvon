@@ -83,8 +83,7 @@ async def send_post(user_id: int, post: dict):
     except Exception as e:
         logging.error(f"Error sending post to {user_id}: {e}")
 
-# Обработчик команды /start
-@dp.message.register(Command(commands=["start"]))
+# Обработчики команд
 async def handle_start(message: types.Message):
     user_id = message.from_user.id
     logging.info(f"User {user_id} started sequence")
@@ -112,23 +111,31 @@ async def handle_start(message: types.Message):
         await asyncio.sleep(delay * 60)
         await send_post(user_id, post)
 
-# Обработчик команды /stop
-@dp.message.register(Command(commands=["stop"]))
 async def handle_stop(message: types.Message):
     user_id = message.from_user.id
     now = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
     report_ws.append_row([now, str(user_id), "No", "No", "Unsubscribed"])
     await message.answer("👋 Вы отписались. Чтобы начать заново, нажмите /start.")
 
-# Обработчик команды /paid
-@dp.message.register(Command(commands=["paid"]))
 async def handle_paid(message: types.Message):
     user_id = message.from_user.id
     now = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
     report_ws.append_row([now, str(user_id), "", "Yes", "Subscribed"])
     await message.answer("✅ Отметил оплату. Спасибо!")
 
+# Регистрация хендлеров
+from aiogram.filters import Command
+
+dp.message.register(handle_start, Command(commands=["start"]))
+dp.message.register(handle_stop, Command(commands=["stop"]))
+dp.message.register(handle_paid, Command(commands=["paid"]))
+
 # Запуск бот-поллинга
+async def main():
+    await dp.start_polling(bot, skip_updates=True)
+
+if __name__ == "__main__":
+    asyncio.run(main())
 async def main():
     await dp.start_polling(bot, skip_updates=True)
 
