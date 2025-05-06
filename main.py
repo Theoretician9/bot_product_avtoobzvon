@@ -89,20 +89,7 @@ async def handle_start(message: types.Message):
     logging.info(f"User {user_id} started sequence")
     await message.answer("🚀 Отлично! Сейчас начну присылать тебе материалы.")
 
-    # === Тестовая вставка в report ===
-    try:
-        now = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
-        report_ws.append_row([
-            now,
-            str(user_id),
-            "Yes",
-            "No",
-            "Subscribed"
-        ])
-        logging.info("Report: added test row")
-    except Exception as e:
-        logging.error(f"Report test failed: {e}")
-    # === Конец теста ===
+    
 
     # Рассылка постов
     posts = load_posts()
