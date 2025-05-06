@@ -127,6 +127,21 @@ async def handle_all_messages(message: types.Message):
     user_id = message.from_user.id
     if message.text == "/start":
         logging.info(f"User {user_id} started sequence")
+        # === Тестовая вставка в report ===
+        try:
+            from zoneinfo import ZoneInfo
+            now = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
+            report_ws.append_row([
+                now,
+                str(user_id),
+                "Yes",
+                "No",
+                "Subscribed"
+            ])
+            logging.info("Report: added test row")
+        except Exception as e:
+            logging.error(f"Report test failed: {e}")
+        # === Конец теста ===
         update_report(user_id, start=True, status="Subscribed")
         await message.answer("🚀 Отлично! Сейчас начну присылать тебе материалы.")
         posts = load_posts()
@@ -155,3 +170,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
