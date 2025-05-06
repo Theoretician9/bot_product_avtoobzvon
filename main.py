@@ -89,6 +89,15 @@ async def handle_start(message: types.Message):
     logging.info(f"User {user_id} started sequence")
     await message.answer("🚀 Отлично! Сейчас начну присылать тебе материалы.")
 
+    # Запись в report при старте
+    try:
+        now = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
+        report_ws.append_row([now, str(user_id), "Yes", "No", "Subscribed"])
+        logging.info(f"Report: /start logged for {user_id}")
+    except Exception as e:
+        logging.error(f"Failed to log /start in report for {user_id}: {e}")
+
+
     
 
     # Рассылка постов
