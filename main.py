@@ -5,6 +5,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -32,15 +33,15 @@ scope = [
     "https://www.googleapis.com/auth/drive.file",
     "https://www.googleapis.com/auth/drive",
 ]
-credentials = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
-gs = gspread.authorize(credentials)
-worksheet = gs.open(SPREADSHEET_NAME).sheet1
+creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+client = gspread.authorize(creds)
+worksheet = client.open(SPREADSHEET_NAME).sheet1
 
 # Инициализация листа report
 try:
-    report_ws = gs.open(SPREADSHEET_NAME).worksheet("report")
+    report_ws = client.open(SPREADSHEET_NAME).worksheet("report")
 except gspread.WorksheetNotFound:
-    sh = gs.open(SPREADSHEET_NAME)
+    sh = client.open(SPREADSHEET_NAME)
     report_ws = sh.add_worksheet(title="report", rows="1000", cols="5")
     report_ws.append_row(["DateTime Moscow", "UserID", "Start", "Paid", "Status"])
 
@@ -50,7 +51,7 @@ def load_posts():
     return worksheet.get_all_records()
 
 # Отправка одного поста
-async def send_post(user_id, post):
+async def send_post(user_id: int, post: dict):
     content = post.get('content', '')
     media_type = post.get('media_type', '').strip().lower()
     file_url = post.get('file_url', '').strip()
@@ -83,7 +84,7 @@ async def send_post(user_id, post):
         logging.error(f"Error sending post to {user_id}: {e}")
 
 # Обработчик команды /start
-@dp.message_handler(commands=['start'])
+@dp.message(Command("start"))
 async def handle_start(message: types.Message):
     user_id = message.from_user.id
     logging.info(f"User {user_id} started sequence")
@@ -111,29 +112,20 @@ async def handle_start(message: types.Message):
         await asyncio.sleep(delay * 60)
         await send_post(user_id, post)
 
-# Обработчики дополнительных команд
-@dp.message_handler(commands=['stop'])
+# Обработчик команды /stop
+@dp.message(Command("stop"))
 async def handle_stop(message: types.Message):
     user_id = message.from_user.id
-    report_ws.append_row([
-        datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S"),
-        str(user_id),
-        "No",
-        "No",
-        "Unsubscribed"
-    ])
+    now = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
+    report_ws.append_row([now, str(user_id), "No", "No", "Unsubscribed"])
     await message.answer("👋 Вы отписались. Чтобы начать заново, нажмите /start.")
 
-@dp.message_handler(commands=['paid'])
+# Обработчик команды /paid
+@dp.message(Command("paid"))
 async def handle_paid(message: types.Message):
     user_id = message.from_user.id
-    report_ws.append_row([
-        datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S"),
-        str(user_id),
-        "",
-        "Yes",
-        "Subscribed"
-    ])
+    now = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
+    report_ws.append_row([now, str(user_id), "", "Yes", "Subscribed"])
     await message.answer("✅ Отметил оплату. Спасибо!")
 
 # Запуск бот-поллинга
@@ -141,5 +133,4 @@ async def main():
     await dp.start_polling(bot, skip_updates=True)
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())
