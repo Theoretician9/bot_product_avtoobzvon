@@ -130,3 +130,16 @@ async def handle_paid(message: types.Message):
 from aiogram.filters import Command
 
 dp.message.register(handle_start, Command(commands=["start"]))
+# Регистрация остальных команд
+from aiogram.filters import Command as Cmd
+
+dp.message.register(handle_stop, Cmd(commands=["stop"]))
+dp.message.register(handle_paid, Cmd(commands=["paid"]))
+
+# Точка входа
+async def main():
+    await dp.start_polling(bot, skip_updates=True)
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
