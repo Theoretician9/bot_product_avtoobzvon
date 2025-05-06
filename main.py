@@ -84,7 +84,7 @@ async def send_post(user_id: int, post: dict):
         logging.error(f"Error sending post to {user_id}: {e}")
 
 # Обработчик команды /start
-@dp.message.register(Command("start"))
+@dp.message.register(Command(commands=["start"]))
 async def handle_start(message: types.Message):
     user_id = message.from_user.id
     logging.info(f"User {user_id} started sequence")
@@ -113,7 +113,7 @@ async def handle_start(message: types.Message):
         await send_post(user_id, post)
 
 # Обработчик команды /stop
-@dp.message.register(Command("stop"))
+@dp.message.register(Command(commands=["stop"]))
 async def handle_stop(message: types.Message):
     user_id = message.from_user.id
     now = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
@@ -121,7 +121,7 @@ async def handle_stop(message: types.Message):
     await message.answer("👋 Вы отписались. Чтобы начать заново, нажмите /start.")
 
 # Обработчик команды /paid
-@dp.message.register(Command("paid"))
+@dp.message.register(Command(commands=["paid"]))
 async def handle_paid(message: types.Message):
     user_id = message.from_user.id
     now = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
