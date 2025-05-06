@@ -1,3 +1,6 @@
+import logging
+logging.basicConfig(level=logging.INFO)
+
 import asyncio
 import os
 from aiogram import Bot, Dispatcher, types
