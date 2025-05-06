@@ -1,16 +1,19 @@
-
 # main.py
 # Упрощённый шаблон бота с отложенной отправкой постов
 # Настройки и логика задаются в отдельном файле
 # Поддерживает кнопку оплаты и чтение контента из CSV
 
 import asyncio
+import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InputFile, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.utils import executor
+from dotenv import load_dotenv
 import csv
 from datetime import datetime, timedelta
 
-BOT_TOKEN = "ВАШ_ТОКЕН_БОТА"
+load_dotenv()
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 TRIBUTE_LINK = "https://tribute.tg/ВАША_ССЫЛКА_НА_ОПЛАТУ"
 POSTS_FILE = "post_template.csv"
 
@@ -59,3 +62,6 @@ async def start_cmd(message: types.Message):
 @dp.message_handler()
 async def welcome(message: types.Message):
     await message.answer("👋 Добро пожаловать! Нажми /start, чтобы начать.")
+
+if __name__ == '__main__':
+    executor.start_polling(dp, skip_updates=True)
