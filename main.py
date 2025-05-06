@@ -10,7 +10,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 
-# Логи
+# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
 # Загрузка переменных окружения
@@ -23,7 +23,7 @@ TRIBUTE_LINK = os.getenv("TRIBUTE_LINK")
 bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher(storage=MemoryStorage())
 
-# Авторизация в Google Sheets
+# Настройка доступа к Google Sheets
 scope = [
     "https://spreadsheets.google.com/feeds",
     "https://www.googleapis.com/auth/spreadsheets",
@@ -38,8 +38,7 @@ worksheet = gs.open(SPREADSHEET_NAME).sheet1
 def load_posts():
     return worksheet.get_all_records()
 
-# Отправка одного поста пользователю
-enum
+# Отправка одного поста
 async def send_post(user_id, post):
     content = post.get('content', '')
     media_type = post.get('media_type', '').strip().lower()
@@ -68,11 +67,11 @@ async def send_post(user_id, post):
         elif media_type == "video_note":
             await bot.send_video_note(user_id, video_note=file_url)
         else:
-            logging.warning(f"Неизвестный media_type '{media_type}' для user {user_id}")
+            logging.warning(f"Unknown media type '{media_type}' for user {user_id}")
     except Exception as e:
         logging.error(f"Error sending post to {user_id}: {e}")
 
-# Обработка входящих сообщений
+# Обработка всех входящих сообщений
 @dp.message()
 async def handle_all_messages(message: types.Message):
     user_id = message.from_user.id
