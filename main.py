@@ -86,7 +86,70 @@ async def handle_all_messages(message: types.Message):
     else:
         await message.answer("👋 Добро пожаловать! Нажми /start, чтобы начать.")
 
+# Инициализация report sheet
+try:
+    report_ws = gs.open(SPREADSHEET_NAME).worksheet("report")
+except Exception:
+    # Если листа нет, создаём
+    sh = gs.open(SPREADSHEET_NAME)
+    report_ws = sh.add_worksheet(title="report", rows="1000", cols="5")
+    # Устанавливаем заголовки
+    report_ws.append_row(["DateTime Moscow","UserID","Start","Paid","Status"])
+
+# Функция обновления отчёта
+def update_report(user_id, start=None, paid=None, status=None):
+    from zoneinfo import ZoneInfo
+    now = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
+    # Ищем пользователя
+    try:
+        cell = report_ws.find(str(user_id), in_column=2)
+        row = cell.row
+        if start is not None:
+            report_ws.update_cell(row, 3, "Yes" if start else "No")
+            report_ws.update_cell(row, 1, now)
+        if paid is not None:
+            report_ws.update_cell(row, 4, "Yes" if paid else "No")
+        if status is not None:
+            report_ws.update_cell(row, 5, status)
+    except Exception:
+        # Если не найден — добавляем новую строку
+        report_ws.append_row([
+            now,
+            str(user_id),
+            "Yes" if start else "No" if start is not None else "",
+            "Yes" if paid else "No" if paid is not None else "",
+            status or ""
+        ])
+
+# Обработка всех входящих сообщений
+@dp.message()
+async def handle_all_messages(message: types.Message):
+    user_id = message.from_user.id
+    if message.text == "/start":
+        logging.info(f"User {user_id} started sequence")
+        update_report(user_id, start=True, status="Subscribed")
+        await message.answer("🚀 Отлично! Сейчас начну присылать тебе материалы.")
+        posts = load_posts()
+        for post in posts:
+            delay = int(post.get('delay_minutes', 0))
+            await asyncio.sleep(delay * 60)
+            await send_post(user_id, post)
+        # после рассылки остаём статус подписан, paid по команде
+    elif message.text == "/stop":
+        update_report(user_id, status="Unsubscribed")
+        await message.answer("👋 Вы отписались. Чтобы начать заново, нажмите /start.")
+    elif message.text == "/paid":
+        update_report(user_id, paid=True)
+        await message.answer("✅ Отметил оплату. Спасибо!")
+    else:
+        await message.answer("👋 Добро пожаловать! Нажми /start, чтобы начать или /paid после оплаты.")
+
 # Запуск бота
+async def main():
+    await dp.start_polling(bot, skip_updates=True)
+
+if __name__ == "__main__":
+    asyncio.run(main())
 async def main():
     await dp.start_polling(bot, skip_updates=True)
 
