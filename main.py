@@ -35,22 +35,24 @@ scope = [
 ]
 creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
 client = gspread.authorize(creds)
-worksheet = client.open(SPREADSHEET_NAME).sheet1
+
+# Основной лист с содержимым постов
+main_ws = client.open(SPREADSHEET_NAME).sheet1
 
 # Инициализация листа report
 try:
     report_ws = client.open(SPREADSHEET_NAME).worksheet("report")
-except gspread.WorksheetNotFound:
+except Exception:
     sh = client.open(SPREADSHEET_NAME)
     report_ws = sh.add_worksheet(title="report", rows="1000", cols="5")
     report_ws.append_row(["DateTime Moscow", "UserID", "Start", "Paid", "Status"])
 
-# Загрузка всех записей из таблицы
+# Загрузка всех записей из основной таблицы
 
 def load_posts():
-    return worksheet.get_all_records()
+    return main_ws.get_all_records()
 
-# Отправка одного поста
+# Функция отправки одного поста по типу media_type
 async def send_post(user_id: int, post: dict):
     content = post.get('content', '')
     media_type = post.get('media_type', '').strip().lower()
@@ -80,10 +82,10 @@ async def send_post(user_id: int, post: dict):
             await bot.send_video_note(user_id, video_note=file_url)
         else:
             logging.warning(f"Unknown media type '{media_type}' for user {user_id}")
-    except Exception as e:
-        logging.error(f"Error sending post to {user_id}: {e}")
+    except Exception:
+        logging.exception(f"Error sending post to {user_id}")
 
-# Обработчики команд
+# Обработчик команды /start
 async def handle_start(message: types.Message):
     user_id = message.from_user.id
     logging.info(f"User {user_id} started sequence")
@@ -94,11 +96,8 @@ async def handle_start(message: types.Message):
         now = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
         report_ws.append_row([now, str(user_id), "Yes", "No", "Subscribed"])
         logging.info(f"Report: /start logged for {user_id}")
-    except Exception as e:
-        logging.error(f"Failed to log /start in report for {user_id}: {e}")
-
-
-    
+    except Exception:
+        logging.exception(f"Failed to log /start for {user_id}")
 
     # Рассылка постов
     posts = load_posts()
@@ -107,33 +106,27 @@ async def handle_start(message: types.Message):
         await asyncio.sleep(delay * 60)
         await send_post(user_id, post)
 
+# Обработчик команды /stop
 async def handle_stop(message: types.Message):
     user_id = message.from_user.id
     now = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
-    report_ws.append_row([now, str(user_id), "No", "No", "Unsubscribed"])
+    try:
+        report_ws.append_row([now, str(user_id), "No", "No", "Unsubscribed"])
+    except Exception:
+        logging.exception(f"Failed to log /stop for {user_id}")
     await message.answer("👋 Вы отписались. Чтобы начать заново, нажмите /start.")
 
+# Обработчик команды /paid
 async def handle_paid(message: types.Message):
     user_id = message.from_user.id
     now = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
-    report_ws.append_row([now, str(user_id), "", "Yes", "Subscribed"])
+    try:
+        report_ws.append_row([now, str(user_id), "", "Yes", "Subscribed"])
+    except Exception:
+        logging.exception(f"Failed to log /paid for {user_id}")
     await message.answer("✅ Отметил оплату. Спасибо!")
 
-# Регистрация хендлеров
+# Регистрация хендлеров команд
 from aiogram.filters import Command
 
 dp.message.register(handle_start, Command(commands=["start"]))
-dp.message.register(handle_stop, Command(commands=["stop"]))
-dp.message.register(handle_paid, Command(commands=["paid"]))
-
-# Запуск бот-поллинга
-async def main():
-    await dp.start_polling(bot, skip_updates=True)
-
-if __name__ == "__main__":
-    asyncio.run(main())
-async def main():
-    await dp.start_polling(bot, skip_updates=True)
-
-if __name__ == "__main__":
-    asyncio.run(main())
