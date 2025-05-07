@@ -81,15 +81,17 @@ async def send_post(user_id: int, post_index: int):
     content = post.get('content', '')
     media_type = post.get('media_type', '').strip().lower()
     file_url = post.get('file_url', '').strip()
-    with_button = str(post.get('pay_button', '')).strip().lower() == 'true'
+    with_pay_button = str(post.get('pay_button', '')).strip().lower() == 'true'
+    with_next_button = str(post.get('button', '')).strip().lower() == 'true'
     delay = int(post.get('delay_minutes', 0))
 
     buttons = []
-    if with_button and TRIBUTE_LINK:
+    if with_pay_button and TRIBUTE_LINK:
         buttons.append([InlineKeyboardButton(text="💳 Оплатить", url=TRIBUTE_LINK)])
-    buttons.append([InlineKeyboardButton(text="➡️ Далее", callback_data=f"next_{post_index+1}")])
+    if with_next_button:
+        buttons.append([InlineKeyboardButton(text="➡️ Далее", callback_data=f"next_{post_index+1}")])
 
-    markup = InlineKeyboardMarkup(inline_keyboard=buttons)
+    markup = InlineKeyboardMarkup(inline_keyboard=buttons) if buttons else None
 
     try:
         if media_type == "text":
