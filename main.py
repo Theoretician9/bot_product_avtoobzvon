@@ -55,8 +55,8 @@ except Exception:
 try:
     greeting_ws = client.open(SPREADSHEET_NAME).worksheet("greeting")
 except Exception:
-    greeting_ws = client.open(SPREADSHEET_NAME).add_worksheet(title="greeting", rows="10", cols="1")
-    greeting_ws.update("A1", [["Welcome Message"], ["🚀 Отлично! Чтобы получать материалы, нажимай кнопку 'Далее'."]])
+    greeting_ws = client.open(SPREADSHEET_NAME).add_worksheet(title="greeting", rows="10", cols="3")
+    greeting_ws.update("A1", [["Welcome Message", "media_type", "file_url"], ["🚀 Отлично! Чтобы получать материалы, нажимай кнопку 'Далее'.", "", ""]])
 
 # Загрузка всех записей из основной таблицы
 
@@ -65,10 +65,13 @@ def load_posts():
 
 def get_greeting():
     try:
-        return greeting_ws.cell(2, 1).value
+        message = greeting_ws.cell(2, 1).value
+        media_type = greeting_ws.cell(2, 2).value.strip().lower()
+        file_url = greeting_ws.cell(2, 3).value.strip()
+        return message, media_type, file_url
     except Exception:
         logging.exception("Failed to load greeting message")
-        return "Привет!"
+        return "Привет!", "text", ""
 
 # Функция отправки одного поста
 async def send_post(user_id: int, post_index: int):
@@ -113,7 +116,6 @@ async def send_post(user_id: int, post_index: int):
     except Exception:
         logging.exception(f"Error sending post to {user_id}")
 
-    # планируем автоматическую отправку следующего поста через delay
     if post_index + 1 < len(posts):
         if user_id in user_tasks and user_tasks[user_id]:
             user_tasks[user_id].cancel()
@@ -134,8 +136,21 @@ async def handle_start(message: types.Message):
     logging.info(f"User {user_id} started sequence")
 
     try:
-        greeting = get_greeting()
-        await message.answer(greeting)
+        greeting, media_type, file_url = get_greeting()
+        if media_type == "photo":
+            await bot.send_photo(user_id, photo=file_url, caption=greeting)
+        elif media_type == "video":
+            await bot.send_video(user_id, video=file_url, caption=greeting)
+        elif media_type == "document":
+            await bot.send_document(user_id, document=file_url, caption=greeting)
+        elif media_type == "audio":
+            await bot.send_audio(user_id, audio=file_url, caption=greeting)
+        elif media_type == "voice":
+            await bot.send_voice(user_id, voice=file_url, caption=greeting)
+        elif media_type == "video_note":
+            await bot.send_video_note(user_id, video_note=file_url)
+        else:
+            await message.answer(greeting)
     except Exception:
         await message.answer("🚀 Отлично! Чтобы получать материалы, нажимай кнопку 'Далее'.")
 
@@ -155,7 +170,6 @@ async def handle_next(callback: CallbackQuery):
     next_index = int(callback.data.split("_")[1])
     user_progress[user_id] = next_index
 
-    # Отменяем автоматическую задачу
     if user_id in user_tasks and user_tasks[user_id]:
         user_tasks[user_id].cancel()
 
