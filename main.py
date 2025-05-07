@@ -28,6 +28,7 @@ dp = Dispatcher(storage=MemoryStorage())
 
 # Прогресс пользователей по постам (user_id: index)
 user_progress = {}
+user_tasks = {}
 
 # Авторизация в Google Sheets
 scope = [
@@ -81,6 +82,7 @@ async def send_post(user_id: int, post_index: int):
     media_type = post.get('media_type', '').strip().lower()
     file_url = post.get('file_url', '').strip()
     with_button = str(post.get('pay_button', '')).strip().lower() == 'true'
+    delay = int(post.get('delay_minutes', 0))
 
     buttons = []
     if with_button and TRIBUTE_LINK:
@@ -109,6 +111,21 @@ async def send_post(user_id: int, post_index: int):
     except Exception:
         logging.exception(f"Error sending post to {user_id}")
 
+    # планируем автоматическую отправку следующего поста через delay
+    if post_index + 1 < len(posts):
+        if user_id in user_tasks and user_tasks[user_id]:
+            user_tasks[user_id].cancel()
+        user_tasks[user_id] = asyncio.create_task(schedule_next_post(user_id, post_index + 1, delay))
+
+# Планирование следующего поста по таймеру
+async def schedule_next_post(user_id: int, post_index: int, delay: int):
+    try:
+        await asyncio.sleep(delay * 60)
+        user_progress[user_id] = post_index
+        await send_post(user_id, post_index)
+    except asyncio.CancelledError:
+        logging.info(f"Auto-sending to {user_id} cancelled manually.")
+
 # Обработчик команды /start
 async def handle_start(message: types.Message):
     user_id = message.from_user.id
@@ -135,6 +152,11 @@ async def handle_next(callback: CallbackQuery):
     user_id = callback.from_user.id
     next_index = int(callback.data.split("_")[1])
     user_progress[user_id] = next_index
+
+    # Отменяем автоматическую задачу
+    if user_id in user_tasks and user_tasks[user_id]:
+        user_tasks[user_id].cancel()
+
     await send_post(user_id, next_index)
     await callback.answer()
 
