@@ -5,10 +5,10 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import Command, CommandStart
+from aiogram.filters import Command
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, Message
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.exceptions import TelegramForbiddenError
 from dotenv import load_dotenv
 import gspread
@@ -95,47 +95,6 @@ def update_or_append_report(user_id, start=None, paid=None, status=None):
         report_ws.update_cell(row_idx, 1, now)
     else:
         report_ws.append_row([now, str(user_id), start or "", paid or "", status or ""])
-
-# Приветственный экран с кнопкой "СТАРТ"
-@dp.message(CommandStart())
-async def start_button_interface(message: Message):
-    markup = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="▶️ СТАРТ", callback_data="launch")]
-        ]
-    )
-    await message.answer("Добро пожаловать! Чтобы начать, нажми кнопку ниже:", reply_markup=markup)
-
-# Обработка нажатия кнопки "СТАРТ"
-@dp.callback_query(F.data == "launch")
-async def launch_sequence(callback: CallbackQuery):
-    user_id = callback.from_user.id
-    update_or_append_report(user_id, start="Yes", paid="No", status="Subscribed")
-
-    greeting_text, greeting_media_type, greeting_file_url = get_greeting()
-    try:
-        if greeting_media_type == "text" or greeting_media_type == "":
-            await callback.message.answer(greeting_text)
-        elif greeting_media_type == "photo":
-            await bot.send_photo(user_id, photo=greeting_file_url, caption=greeting_text)
-        elif greeting_media_type == "video":
-            await bot.send_video(user_id, video=greeting_file_url, caption=greeting_text)
-        elif greeting_media_type == "document":
-            await bot.send_document(user_id, document=greeting_file_url, caption=greeting_text)
-        elif greeting_media_type == "audio":
-            await bot.send_audio(user_id, audio=greeting_file_url, caption=greeting_text)
-        elif greeting_media_type == "voice":
-            await bot.send_voice(user_id, voice=greeting_file_url, caption=greeting_text)
-        elif greeting_media_type == "video_note":
-            await bot.send_video_note(user_id, video_note=greeting_file_url)
-        else:
-            await callback.message.answer(greeting_text)
-    except Exception:
-        logging.exception("Failed to send greeting")
-
-    await callback.answer()
-    user_progress[user_id] = 0
-    await send_post(user_id, 0)
 
 # Функция отправки одного поста
 async def send_post(user_id: int, post_index: int):
