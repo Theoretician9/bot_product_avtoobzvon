@@ -258,7 +258,7 @@ async def handle_broadcast(message: types.Message):
 dp.message.register(handle_start, Command(commands=["start"]))
 dp.message.register(handle_stop, Command(commands=["stop"]))
 dp.message.register(handle_paid, Command(commands=["paid"]))
-dp.message.register(handle_broadcast, Command(commands=["broadcast"])))
+dp.message.register(handle_broadcast, Command(commands=["broadcast"]))
 
 # Точка входа
 async def main():
