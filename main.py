@@ -134,3 +134,12 @@ async def handle_broadcast(message: types.Message):
 # Регистрация хендлеров
 dp.message.register(handle_broadcast, Command(commands=["broadcast"]))
 # ... другие команды ниже
+
+# Точка входа
+async def main():
+    logging.info("Bot is starting polling now...")
+    await dp.start_polling(bot, skip_updates=True)
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
