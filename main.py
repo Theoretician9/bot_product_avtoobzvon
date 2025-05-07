@@ -9,6 +9,7 @@ from aiogram.filters import Command
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.exceptions import TelegramForbiddenError
 from dotenv import load_dotenv
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -135,6 +136,9 @@ async def send_post(user_id: int, post_index: int):
             await bot.send_video_note(user_id, video_note=file_url)
         else:
             logging.warning(f"Unknown media type '{media_type}' for user {user_id}")
+    except TelegramForbiddenError:
+        logging.warning(f"User {user_id} blocked the bot. Marking as Unsubscribed.")
+        update_or_append_report(user_id, start="No", status="Unsubscribed")
     except Exception:
         logging.exception(f"Error sending post to {user_id}")
 
