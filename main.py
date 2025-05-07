@@ -59,7 +59,6 @@ except Exception:
     greeting_ws.update("A1", [["Welcome Message", "media_type", "file_url"], ["🚀 Отлично! Чтобы получать материалы, нажимай кнопку 'Далее'.", "", ""]])
 
 # Загрузка всех записей из основной таблицы
-
 def load_posts():
     return main_ws.get_all_records()
 
@@ -72,6 +71,29 @@ def get_greeting():
     except Exception:
         logging.exception("Failed to load greeting message")
         return "Привет!", "text", ""
+
+# Поиск строки пользователя в report
+def find_user_row(user_id):
+    records = report_ws.get_all_records()
+    for idx, row in enumerate(records, start=2):
+        if str(row.get("UserID")) == str(user_id):
+            return idx
+    return None
+
+# Обновление или добавление строки в report
+def update_or_append_report(user_id, start=None, paid=None, status=None):
+    now = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
+    row_idx = find_user_row(user_id)
+    if row_idx:
+        if start is not None:
+            report_ws.update_cell(row_idx, 3, start)
+        if paid is not None:
+            report_ws.update_cell(row_idx, 4, paid)
+        if status is not None:
+            report_ws.update_cell(row_idx, 5, status)
+        report_ws.update_cell(row_idx, 1, now)
+    else:
+        report_ws.append_row([now, str(user_id), start or "", paid or "", status or ""])
 
 # Функция отправки одного поста
 async def send_post(user_id: int, post_index: int):
@@ -116,7 +138,6 @@ async def send_post(user_id: int, post_index: int):
     except Exception:
         logging.exception(f"Error sending post to {user_id}")
 
-
     if post_index + 1 < len(posts):
         if user_id in user_tasks and user_tasks[user_id]:
             user_tasks[user_id].cancel()
@@ -156,8 +177,7 @@ async def handle_start(message: types.Message):
         await message.answer("🚀 Отлично! Чтобы получать материалы, нажимай кнопку 'Далее'.")
 
     try:
-        now = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
-        report_ws.append_row([now, str(user_id), "Yes", "No", "Subscribed"])
+        update_or_append_report(user_id, start="Yes", status="Subscribed")
     except Exception:
         logging.exception(f"Failed to log /start for {user_id}")
 
@@ -171,7 +191,6 @@ async def handle_next(callback: CallbackQuery):
     next_index = int(callback.data.split("_")[1])
     user_progress[user_id] = next_index
 
-
     if user_id in user_tasks and user_tasks[user_id]:
         user_tasks[user_id].cancel()
 
@@ -181,9 +200,8 @@ async def handle_next(callback: CallbackQuery):
 # Обработчик команды /stop
 async def handle_stop(message: types.Message):
     user_id = message.from_user.id
-    now = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
     try:
-        report_ws.append_row([now, str(user_id), "No", "No", "Unsubscribed"])
+        update_or_append_report(user_id, start="No", paid="No", status="Unsubscribed")
     except Exception:
         logging.exception(f"Failed to log /stop for {user_id}")
     await message.answer("👋 Вы отписались. Чтобы начать заново, нажмите /start.")
@@ -191,9 +209,8 @@ async def handle_stop(message: types.Message):
 # Обработчик команды /paid
 async def handle_paid(message: types.Message):
     user_id = message.from_user.id
-    now = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
     try:
-        report_ws.append_row([now, str(user_id), "", "Yes", "Subscribed"])
+        update_or_append_report(user_id, paid="Yes", status="Subscribed")
     except Exception:
         logging.exception(f"Failed to log /paid for {user_id}")
     await message.answer("✅ Отметил оплату. Спасибо!")
@@ -206,14 +223,12 @@ async def handle_broadcast(message: types.Message):
         return
 
     try:
-        # Получаем всех пользователей со статусом Subscribed
         records = report_ws.get_all_records()
         user_ids = list({str(row['UserID']) for row in records if row.get('Status') == 'Subscribed'})
 
-        # Пытаемся загрузить сообщение из листа 'broadcast'
         try:
             broadcast_ws = client.open(SPREADSHEET_NAME).worksheet("broadcast")
-            row = broadcast_ws.get_all_records()[0]  # только первая строка
+            row = broadcast_ws.get_all_records()[0]
             content = row.get('content', '')
             media_type = str(row.get('media_type', '')).strip().lower()
             file_url = str(row.get('file_url', '')).strip()
@@ -221,7 +236,6 @@ async def handle_broadcast(message: types.Message):
             await message.answer("❌ Не удалось прочитать вкладку broadcast.")
             return
 
-        # Отправка сообщения всем подписанным
         success, fail = 0, 0
         for uid in user_ids:
             try:
@@ -252,7 +266,6 @@ async def handle_broadcast(message: types.Message):
     except Exception:
         logging.exception("Broadcast failed")
         await message.answer("❌ Произошла ошибка при рассылке.")
-
 
 # Регистрация хендлеров команд
 dp.message.register(handle_start, Command(commands=["start"]))
