@@ -4,11 +4,11 @@ import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from dotenv import load_dotenv
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -25,6 +25,9 @@ TRIBUTE_LINK = os.getenv("TRIBUTE_LINK")
 # Инициализация бота и диспетчера
 bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher(storage=MemoryStorage())
+
+# Прогресс пользователей по постам (user_id: index)
+user_progress = {}
 
 # Авторизация в Google Sheets
 scope = [
@@ -52,18 +55,25 @@ except Exception:
 def load_posts():
     return main_ws.get_all_records()
 
-# Функция отправки одного поста по типу media_type
-async def send_post(user_id: int, post: dict):
+# Функция отправки одного поста
+async def send_post(user_id: int, post_index: int):
+    posts = load_posts()
+    if post_index >= len(posts):
+        await bot.send_message(user_id, "✅ Все материалы были отправлены.")
+        return
+
+    post = posts[post_index]
     content = post.get('content', '')
     media_type = post.get('media_type', '').strip().lower()
     file_url = post.get('file_url', '').strip()
     with_button = str(post.get('pay_button', '')).strip().lower() == 'true'
 
-    markup = None
+    buttons = []
     if with_button and TRIBUTE_LINK:
-        markup = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="💳 Оплатить", url=TRIBUTE_LINK)]
-        ])
+        buttons.append([InlineKeyboardButton(text="\ud83d\udcb3 Оплатить", url=TRIBUTE_LINK)])
+    buttons.append([InlineKeyboardButton(text="➡️ Далее", callback_data=f"next_{post_index+1}")])
+
+    markup = InlineKeyboardMarkup(inline_keyboard=buttons)
 
     try:
         if media_type == "text":
@@ -89,22 +99,25 @@ async def send_post(user_id: int, post: dict):
 async def handle_start(message: types.Message):
     user_id = message.from_user.id
     logging.info(f"User {user_id} started sequence")
-    await message.answer("🚀 Отлично! Сейчас начну присылать тебе материалы.")
+    await message.answer("\ud83d\ude80 Отлично! Чтобы получать материалы, нажимай кнопку 'Далее'.")
 
-    # Запись в report при старте
     try:
         now = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
         report_ws.append_row([now, str(user_id), "Yes", "No", "Subscribed"])
-        logging.info(f"Report: /start logged for {user_id}")
     except Exception:
         logging.exception(f"Failed to log /start for {user_id}")
 
-    # Рассылка постов
-    posts = load_posts()
-    for post in posts:
-        delay = int(post.get('delay_minutes', 0))
-        await asyncio.sleep(delay * 60)
-        await send_post(user_id, post)
+    user_progress[user_id] = 0
+    await send_post(user_id, 0)
+
+# Обработка кнопки "Далее"
+@dp.callback_query(F.data.startswith("next_"))
+async def handle_next(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    next_index = int(callback.data.split("_")[1])
+    user_progress[user_id] = next_index
+    await send_post(user_id, next_index)
+    await callback.answer()
 
 # Обработчик команды /stop
 async def handle_stop(message: types.Message):
@@ -114,7 +127,7 @@ async def handle_stop(message: types.Message):
         report_ws.append_row([now, str(user_id), "No", "No", "Unsubscribed"])
     except Exception:
         logging.exception(f"Failed to log /stop for {user_id}")
-    await message.answer("👋 Вы отписались. Чтобы начать заново, нажмите /start.")
+    await message.answer("\ud83d\udc4b Вы отписались. Чтобы начать заново, нажмите /start.")
 
 # Обработчик команды /paid
 async def handle_paid(message: types.Message):
@@ -124,17 +137,12 @@ async def handle_paid(message: types.Message):
         report_ws.append_row([now, str(user_id), "", "Yes", "Subscribed"])
     except Exception:
         logging.exception(f"Failed to log /paid for {user_id}")
-    await message.answer("✅ Отметил оплату. Спасибо!")
+    await message.answer("\u2705 Отметил оплату. Спасибо!")
 
 # Регистрация хендлеров команд
-from aiogram.filters import Command
-
 dp.message.register(handle_start, Command(commands=["start"]))
-# Регистрация остальных команд
-from aiogram.filters import Command as Cmd
-
-dp.message.register(handle_stop, Cmd(commands=["stop"]))
-dp.message.register(handle_paid, Cmd(commands=["paid"]))
+dp.message.register(handle_stop, Command(commands=["stop"]))
+dp.message.register(handle_paid, Command(commands=["paid"]))
 
 # Точка входа
 async def main():
@@ -142,5 +150,4 @@ async def main():
     await dp.start_polling(bot, skip_updates=True)
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())
