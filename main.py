@@ -95,8 +95,10 @@ async def send_post(user_id: int, post_index: int):
     delay = int(post.get('delay_minutes', 0))
 
     buttons = []
-    if with_pay_button and TRIBUTE_LINK:
-        buttons.append([InlineKeyboardButton(text="💳 Оплатить", url=TRIBUTE_LINK)])
+    if with_pay_button:
+        buttons.append([
+            InlineKeyboardButton(text="💳 Оплатить", callback_data=f"pay_{post_index}")
+        ])
     if with_next_button:
         buttons.append([InlineKeyboardButton(text="➡️ Далее", callback_data=f"next_{post_index+1}")])
 
@@ -116,7 +118,38 @@ async def send_post(user_id: int, post_index: int):
         elif media_type == "voice":
             await bot.send_voice(user_id, voice=file_url, caption=content, reply_markup=markup)
         elif media_type == "video_note":
-            await bot.send_video_note(user_id, video_note=file_url)
+            from aiogram.types import FSInputFile
+
+            if file_url.startswith("http"):
+                # Скачивание в temp файл
+                import aiohttp
+                import tempfile
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(file_url) as resp:
+                        if resp.status == 200:
+                            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+                            tmp.write(await resp.read())
+                            tmp.close()
+                            import subprocess
+                            try:
+                                result = subprocess.run(
+                                    ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                                     "stream=width,height,duration", "-of", "csv=p=0", tmp.name],
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT
+                                )
+                                width, height, duration = result.stdout.decode().strip().split(',')
+                                if width != height:
+                                    logging.warning(f"Video is not square: {width}x{height}")
+                                if float(duration) > 60:
+                                    logging.warning(f"Video duration too long: {duration}s")
+                            except Exception:
+                                logging.exception("Failed to verify video format")
+                            await bot.send_video_note(user_id, video_note=FSInputFile(tmp.name))
+                        else:
+                            logging.warning(f"Couldn't download video_note from URL: {file_url}")
+            else:
+                await bot.send_video_note(user_id, video_note=FSInputFile(file_url))
         else:
             logging.warning(f"Unknown media type '{media_type}' for user {user_id}")
     except TelegramForbiddenError:
@@ -151,6 +184,20 @@ async def handle_start(message: types.Message):
 
     user_progress[user_id] = 0
     await send_post(user_id, 0)
+
+# Обработка кнопки "Оплатить"
+@dp.callback_query(F.data.startswith("pay_"))
+async def handle_payment(callback: CallbackQuery):
+    index = int(callback.data.split("_")[1])
+    markup = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🌟 Оплатить звёздочками Telegram", url=os.getenv("TRIBUTE_LINK")),
+            InlineKeyboardButton(text="💳 Оплатить картой", url=os.getenv("YOOMONEY_LINK"))
+        ]
+    ])
+    await callback.message.answer("Выберите способ оплаты:", reply_markup=markup)
+    await callback.answer()
+
 
 # Обработка кнопки "Далее"
 @dp.callback_query(F.data.startswith("next_"))
@@ -221,7 +268,20 @@ async def handle_broadcast(message: types.Message):
                 elif media_type == "voice":
                     await bot.send_voice(uid, voice=file_url, caption=content)
                 elif media_type == "video_note":
-                    await bot.send_video_note(uid, video_note=file_url)
+                    from aiogram.types import FSInputFile
+                    import aiohttp, tempfile
+                    if file_url.startswith("http"):
+                        async with aiohttp.ClientSession() as session:
+                            async with session.get(file_url) as resp:
+                                if resp.status == 200:
+                                    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+                                    tmp.write(await resp.read())
+                                    tmp.close()
+                                    await bot.send_video_note(uid, video_note=FSInputFile(tmp.name))
+                                else:
+                                    logging.warning(f"Couldn't download video_note from URL: {file_url}")
+                    else:
+                        await bot.send_video_note(uid, video_note=FSInputFile(file_url))
                 else:
                     await bot.send_message(uid, content)
                 success += 1
