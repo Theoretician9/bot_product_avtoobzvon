@@ -90,6 +90,7 @@ async def send_post(user_id: int, post_index: int):
     content = post.get('content', '')
     media_type = post.get('media_type', '').strip().lower()
     file_url = post.get('file_url', '').strip()
+    file_path = file_url if file_url.startswith("http") else os.path.join("/home/admin/telegram_bot", file_url)
     with_pay_button = str(post.get('pay_button', '')).strip().lower() == 'true'
     with_next_button = str(post.get('button', '')).strip().lower() == 'true'
     delay = int(post.get('delay_minutes', 0))
@@ -108,15 +109,15 @@ async def send_post(user_id: int, post_index: int):
         if media_type == "text":
             await bot.send_message(user_id, content, reply_markup=markup)
         elif media_type == "photo":
-            await bot.send_photo(user_id, photo=file_url, caption=content, reply_markup=markup)
+            await bot.send_photo(user_id, photo=file_path, caption=content, reply_markup=markup)
         elif media_type == "video":
-            await bot.send_video(user_id, video=file_url, caption=content, reply_markup=markup)
+            await bot.send_video(user_id, video=file_path, caption=content, reply_markup=markup)
         elif media_type == "document":
-            await bot.send_document(user_id, document=file_url, caption=content, reply_markup=markup)
+            await bot.send_document(user_id, document=file_path, caption=content, reply_markup=markup)
         elif media_type == "audio":
-            await bot.send_audio(user_id, audio=file_url, caption=content, reply_markup=markup)
+            await bot.send_audio(user_id, audio=file_path, caption=content, reply_markup=markup)
         elif media_type == "voice":
-            await bot.send_voice(user_id, voice=file_url, caption=content, reply_markup=markup)
+            await bot.send_voice(user_id, voice=file_path, caption=content, reply_markup=markup)
         elif media_type == "video_note":
             from aiogram.types import FSInputFile
 
@@ -149,7 +150,7 @@ async def send_post(user_id: int, post_index: int):
                         else:
                             logging.warning(f"Couldn't download video_note from URL: {file_url}")
             else:
-                await bot.send_video_note(user_id, video_note=FSInputFile(file_url))
+                await bot.send_video_note(user_id, video_note=FSInputFile(file_path))
         else:
             logging.warning(f"Unknown media type '{media_type}' for user {user_id}")
     except TelegramForbiddenError:
